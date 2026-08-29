@@ -1,0 +1,20 @@
+# Root .gitignore for Sistema Asistencia UNITEPC
+
+# Logs & Environment
+.env
+.env.production
+*.log
+.DS_Store
+Thumbs.db
+
+# Laravel Backend Ignored Files
+backend/.env
+backend/vendor/
+backend/storage/*.key
+backend/storage/logs/*.log
+backend/bootstrap/cache/*.php
+
+# Quasar/Vite Frontend Ignored Files
+frontend/node_modules/
+frontend/dist/
+frontend/.quasar/
