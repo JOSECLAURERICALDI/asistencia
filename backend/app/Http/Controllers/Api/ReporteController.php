@@ -607,20 +607,47 @@ class ReporteController extends Controller
 
         $asistencias = $query->orderBy('fecha', 'desc')->get();
 
-        $asistenciasMapped = $asistencias->map(function ($a) {
+        // Consultar acciones tomadas / notificaciones registradas por la Dirección
+        $queryAcciones = \App\Models\AccionFalta::with(['inscripcion.materia', 'admin'])
+            ->whereIn('inscripcion_id', $inscripcionesIds);
+
+        if (!empty($materiaId)) {
+            $queryAcciones->whereHas('inscripcion', function ($q) use ($materiaId) {
+                $q->where('materia_id', $materiaId);
+            });
+        }
+
+        $accionesTomadas = $queryAcciones->get();
+
+        $asistenciasMapped = $asistencias->map(function ($a) use ($accionesTomadas) {
             $fechaObj = $a->fecha ? Carbon::parse($a->fecha) : null;
+
+            // Verificar si esta falta fue notificada por alguna acción tomada posterior
+            $accionRelacionada = null;
+            if ($a->estado === 'ausente' && $fechaObj) {
+                $accionRelacionada = $accionesTomadas
+                    ->where('inscripcion_id', $a->inscripcion_id)
+                    ->filter(fn($acc) => $acc->fecha_accion && $acc->fecha_accion->toDateString() >= $fechaObj->toDateString())
+                    ->sortBy('fecha_accion')
+                    ->first();
+            }
+
             return [
-                'id'             => $a->id,
-                'fecha'          => $fechaObj ? $fechaObj->format('d/m/Y') : '',
-                'fecha_iso'      => $fechaObj ? $fechaObj->toDateString() : '',
-                'materia_codigo' => $a->inscripcion->materia->codigo ?? '',
-                'materia_nombre' => $a->inscripcion->materia->nombre ?? '',
-                'estado'         => $a->estado,
-                'es_retroactiva' => (bool)$a->es_retroactiva,
-                'justificacion'  => $a->justificacion_retroactiva,
-                'docente_nombre' => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
-                'hora_inicio'    => $a->horario->hora_inicio ?? '',
-                'aula'           => $a->horario->aula ?? '',
+                'id'                     => $a->id,
+                'inscripcion_id'         => $a->inscripcion_id,
+                'fecha'                  => $fechaObj ? $fechaObj->format('d/m/Y') : '',
+                'fecha_iso'              => $fechaObj ? $fechaObj->toDateString() : '',
+                'materia_codigo'         => $a->inscripcion->materia->codigo ?? '',
+                'materia_nombre'         => $a->inscripcion->materia->nombre ?? '',
+                'estado'                 => $a->estado,
+                'es_retroactiva'         => (bool)$a->es_retroactiva,
+                'justificacion'          => $a->justificacion_retroactiva,
+                'docente_nombre'         => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
+                'hora_inicio'            => $a->horario->hora_inicio ?? '',
+                'aula'                   => $a->horario->aula ?? '',
+                'es_notificada'          => (bool)$accionRelacionada,
+                'fecha_notificacion'     => $accionRelacionada?->fecha_accion ? $accionRelacionada->fecha_accion->format('d/m/Y H:i') : null,
+                'observacion_notificacion'=> $accionRelacionada?->observacion,
             ];
         });
 
@@ -653,12 +680,35 @@ class ReporteController extends Controller
             ];
         });
 
-        // Combinar ambas y ordenar por fecha descendente
-        $todosLosRegistros = $asistenciasMapped->concat($omitidasMapped)->sortByDesc('fecha_iso')->values();
+        $accionesMapped = $accionesTomadas->map(function ($acc) {
+            $fechaObj = $acc->fecha_accion;
+            return [
+                'id'             => 'accion_' . $acc->id,
+                'fecha'          => $fechaObj ? $fechaObj->format('d/m/Y') : '',
+                'fecha_hora'     => $fechaObj ? $fechaObj->format('d/m/Y H:i') : '',
+                'fecha_iso'      => $fechaObj ? $fechaObj->toDateTimeString() : '',
+                'materia_codigo' => $acc->inscripcion->materia->codigo ?? '',
+                'materia_nombre' => $acc->inscripcion->materia->nombre ?? '',
+                'estado'         => 'notificacion',
+                'es_retroactiva' => false,
+                'justificacion'  => $acc->observacion,
+                'docente_nombre' => $acc->admin ? "{$acc->admin->nombre} {$acc->admin->apellido} (Director)" : 'Director de Carrera',
+                'hora_inicio'    => $fechaObj ? $fechaObj->format('H:i') : '',
+                'aula'           => 'Dirección',
+            ];
+        });
+
+        // Combinar todas las listas (asistencias, omitidas y notificaciones) y ordenar por fecha descendente
+        $todosLosRegistros = $asistenciasMapped
+            ->concat($omitidasMapped)
+            ->concat($accionesMapped)
+            ->sortByDesc('fecha_iso')
+            ->values();
 
         $totalClases = $asistenciasMapped->count();
         $presentes   = $asistenciasMapped->where('estado', 'presente')->count();
         $ausentes    = $asistenciasMapped->where('estado', 'ausente')->count();
+        $notificadosCount = $asistenciasMapped->where('estado', 'ausente')->where('es_notificada', true)->count();
         $permisos    = $asistenciasMapped->where('estado', 'permiso')->count();
         $omitidasCount = $omitidasMapped->count();
         $porcentaje  = $totalClases > 0 ? round(($presentes / $totalClases) * 100, 1) : 0;
@@ -674,6 +724,7 @@ class ReporteController extends Controller
                 'total_clases' => $totalClases,
                 'presentes'    => $presentes,
                 'ausentes'     => $ausentes,
+                'notificados'  => $notificadosCount,
                 'permisos'     => $permisos,
                 'omitidas'     => $omitidasCount,
                 'porcentaje'   => $porcentaje,

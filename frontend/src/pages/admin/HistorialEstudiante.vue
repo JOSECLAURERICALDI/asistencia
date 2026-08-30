@@ -168,8 +168,41 @@
 
               <template #body-cell-estado="props">
                 <q-td :props="props" align="center">
+                  <!-- Evento Notificación Director -->
                   <q-chip
-                    v-if="props.row.estado === 'omitida'"
+                    v-if="props.row.estado === 'notificacion'"
+                    dense
+                    color="purple-9"
+                    text-color="white"
+                    class="text-weight-bold"
+                    icon="phone_in_talk"
+                  >
+                    📞 NOTIFICACIÓN DIRECTOR
+                  </q-chip>
+                  <!-- Ausente Notificado -->
+                  <q-chip
+                    v-else-if="props.row.estado === 'ausente' && props.row.es_notificada"
+                    dense
+                    color="purple-7"
+                    text-color="white"
+                    class="text-weight-bold"
+                    icon="mark_email_read"
+                  >
+                    Notificado
+                  </q-chip>
+                  <!-- Ausente Falta Activa -->
+                  <q-chip
+                    v-else-if="props.row.estado === 'ausente'"
+                    dense
+                    color="negative"
+                    text-color="white"
+                    class="text-weight-bold"
+                  >
+                    Ausente (Falta Activa)
+                  </q-chip>
+                  <!-- No Marcada -->
+                  <q-chip
+                    v-else-if="props.row.estado === 'omitida'"
                     dense
                     color="blue-grey-7"
                     text-color="white"
@@ -177,10 +210,11 @@
                   >
                     No Marcada
                   </q-chip>
+                  <!-- Presente / Permiso -->
                   <q-chip
                     v-else
                     dense
-                    :color="props.row.estado === 'presente' ? 'positive' : props.row.estado === 'permiso' ? 'warning' : 'negative'"
+                    :color="props.row.estado === 'presente' ? 'positive' : 'warning'"
                     text-color="white"
                     class="text-weight-bold text-capitalize"
                   >
@@ -191,14 +225,20 @@
 
               <template #body-cell-docente="props">
                 <q-td :props="props">
-                  <div class="text-grey-3">{{ props.row.docente_nombre }}</div>
+                  <div class="text-grey-3 font-weight-medium">{{ props.row.docente_nombre }}</div>
                 </q-td>
               </template>
 
               <template #body-cell-justificacion="props">
                 <q-td :props="props">
-                  <div v-if="props.row.estado === 'omitida'" class="text-weight-medium text-amber-3">
+                  <div v-if="props.row.estado === 'notificacion'" class="text-weight-bold text-purple-3">
+                    📞 Notificación registrada: <span class="text-white">{{ props.row.justificacion }}</span>
+                  </div>
+                  <div v-else-if="props.row.estado === 'omitida'" class="text-weight-medium text-amber-3">
                     🛑 Motivo docente: <strong>{{ props.row.justificacion }}</strong>
+                  </div>
+                  <div v-else-if="props.row.es_notificada" class="text-caption text-purple-3">
+                    📞 Notificado el {{ props.row.fecha_notificacion }} <span v-if="props.row.observacion_notificacion" class="text-grey-4">({{ props.row.observacion_notificacion }})</span>
                   </div>
                   <div v-else-if="props.row.justificacion" class="text-caption text-amber-3">
                     ⚠️ {{ props.row.justificacion }}
