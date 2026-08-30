@@ -55,6 +55,20 @@
           </q-td>
         </template>
 
+        <template #body-cell-contacto="props">
+          <q-td :props="props">
+            <div v-if="props.row.contacto_telefono" class="text-caption text-grey-2">
+              <q-icon name="phone" color="positive" size="14px" /> 
+              <strong>{{ props.row.contacto_nombre || 'Contacto' }}</strong> 
+              <span v-if="props.row.contacto_parentesco" class="text-grey-4">({{ props.row.contacto_parentesco }})</span>:
+              <a :href="`tel:${props.row.contacto_telefono}`" class="text-blue-3 text-weight-bold text-decoration-none q-ml-xs">
+                {{ props.row.contacto_telefono }}
+              </a>
+            </div>
+            <div v-else class="text-caption text-grey-6 italic">Sin referencia registrada</div>
+          </q-td>
+        </template>
+
         <template #body-cell-acciones="props">
           <q-td :props="props" align="right">
             <q-btn flat round dense icon="no_accounts" color="amber-4" @click="abrirModalAbandono(props.row)">
@@ -91,6 +105,21 @@
             emit-value map-options
             label="Carrera" outlined dark dense class="q-mb-md"
           />
+
+          <q-separator dark class="q-my-md" />
+
+          <div class="text-subtitle2 text-weight-bold text-indigo-3 q-mb-xs flex items-center gap-1">
+            <q-icon name="contacts" size="18px" /> Persona de Contacto / Referencia Familiar:
+          </div>
+          <q-input v-model="form.contacto_nombre" label="Nombre del Familiar / Apoderado" outlined dark dense class="q-mb-sm" placeholder="Ej: Juan Pérez" />
+          <div class="row q-col-gutter-sm">
+            <div class="col-6">
+              <q-input v-model="form.contacto_parentesco" label="Parentesco" outlined dark dense placeholder="Ej: Padre, Madre, Tutor" />
+            </div>
+            <div class="col-6">
+              <q-input v-model="form.contacto_telefono" label="Teléfono / Celular" outlined dark dense placeholder="Ej: 71234567" />
+            </div>
+          </div>
         </q-card-section>
 
         <q-card-actions align="right" class="q-px-md q-pb-md">
@@ -222,12 +251,16 @@ const form = reactive({
   primer_apellido: '',
   segundo_apellido: '',
   carrera_id: null,
+  contacto_nombre: '',
+  contacto_parentesco: '',
+  contacto_telefono: '',
 })
 
 const columns = [
   { name: 'carnet', label: 'Carnet / Código', field: 'carnet', align: 'left', sortable: true },
   { name: 'nombre_completo', label: 'Estudiante', field: 'nombre_completo', align: 'left', sortable: true },
   { name: 'carrera', label: 'Carrera', field: 'carrera', align: 'left' },
+  { name: 'contacto', label: 'Contacto / Referencia', align: 'left' },
   { name: 'acciones', label: 'Acciones', field: 'acciones', align: 'right' },
 ]
 
@@ -277,6 +310,9 @@ function abrirCrearModal() {
   form.primer_apellido = ''
   form.segundo_apellido = ''
   form.carrera_id = carreras.value[0]?.id || null
+  form.contacto_nombre = ''
+  form.contacto_parentesco = ''
+  form.contacto_telefono = ''
   modalOpen.value = true
 }
 
@@ -288,6 +324,9 @@ function abrirEditarModal(row) {
   form.primer_apellido = row.primer_apellido
   form.segundo_apellido = row.segundo_apellido || ''
   form.carrera_id = row.carrera_id
+  form.contacto_nombre = row.contacto_nombre || ''
+  form.contacto_parentesco = row.contacto_parentesco || ''
+  form.contacto_telefono = row.contacto_telefono || ''
   modalOpen.value = true
 }
 

@@ -218,6 +218,9 @@ class ReporteController extends Controller
                 'estudiante_carnet'      => $insc->estudiante->carnet ?? '',
                 'estudiante_nombre'      => trim(($insc->estudiante->primer_apellido ?? '') . ' ' . ($insc->estudiante->segundo_apellido ?? '') . ' ' . ($insc->estudiante->nombres ?? '')),
                 'carrera'                => $insc->estudiante->carrera->nombre ?? '',
+                'contacto_nombre'        => $insc->estudiante->contacto_nombre,
+                'contacto_parentesco'    => $insc->estudiante->contacto_parentesco,
+                'contacto_telefono'      => $insc->estudiante->contacto_telefono,
                 'materia_id'             => $insc->materia_id,
                 'materia_codigo'         => $insc->materia->codigo ?? '',
                 'materia_nombre'         => $insc->materia->nombre ?? '',
@@ -697,10 +700,13 @@ class ReporteController extends Controller
 
         return response()->json([
             'estudiante' => [
-                'id'              => $estudiante->id,
-                'carnet'          => $estudiante->carnet,
-                'nombre_completo' => trim("{$estudiante->primer_apellido} {$estudiante->segundo_apellido} {$estudiante->nombres}"),
-                'carrera'         => $estudiante->carrera->nombre ?? '',
+                'id'                  => $estudiante->id,
+                'carnet'              => $estudiante->carnet,
+                'nombre_completo'     => trim("{$estudiante->primer_apellido} {$estudiante->segundo_apellido} {$estudiante->nombres}"),
+                'carrera'             => $estudiante->carrera->nombre ?? '',
+                'contacto_nombre'     => $estudiante->contacto_nombre,
+                'contacto_parentesco' => $estudiante->contacto_parentesco,
+                'contacto_telefono'   => $estudiante->contacto_telefono,
             ],
             'estadisticas' => [
                 'total_clases' => $totalClases,

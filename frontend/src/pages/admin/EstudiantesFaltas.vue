@@ -79,7 +79,13 @@
           <template #body-cell-estudiante="props">
             <q-td :props="props">
               <div class="text-weight-bold text-white">{{ props.row.estudiante_nombre }}</div>
-              <div class="text-caption text-grey-5">Carnet/CI: {{ props.row.estudiante_carnet }}</div>
+              <div class="text-caption text-grey-4">Carnet/CI: {{ props.row.estudiante_carnet }}</div>
+              <div v-if="props.row.contacto_telefono" class="text-caption text-positive flex items-center gap-1 q-mt-xs">
+                <q-icon name="phone" size="12px" />
+                <span>{{ props.row.contacto_nombre || 'Contacto' }}<span v-if="props.row.contacto_parentesco"> ({{ props.row.contacto_parentesco }})</span>:</span>
+                <a :href="`tel:${props.row.contacto_telefono}`" class="text-blue-3 text-weight-bold text-decoration-none">{{ props.row.contacto_telefono }}</a>
+              </div>
+              <div v-else class="text-caption text-grey-6 italic">Sin contacto registrado</div>
             </q-td>
           </template>
 
@@ -170,6 +176,30 @@
               <q-chip color="negative" text-color="white" class="text-weight-bold" icon="error">
                 Faltas activas: {{ estudianteSeleccionado.total_faltas }}
               </q-chip>
+            </div>
+          </div>
+
+          <!-- Tarjeta de Referencia / Contacto Familiar -->
+          <div class="contacto-card q-pa-md q-mb-md flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <div class="text-caption text-indigo-3 text-weight-bold flex items-center gap-1">
+                <q-icon name="contacts" size="16px" /> PERSONA DE CONTACTO / REFERENCIA FAMILIAR:
+              </div>
+              <div v-if="estudianteSeleccionado.contacto_telefono" class="text-body2 text-white font-weight-medium q-mt-xs">
+                <strong>{{ estudianteSeleccionado.contacto_nombre || 'Familiar / Tutor' }}</strong>
+                <span v-if="estudianteSeleccionado.contacto_parentesco" class="text-grey-4"> ({{ estudianteSeleccionado.contacto_parentesco }})</span>
+                <div class="text-caption text-blue-3 font-mono">Teléfono / Celular: <strong>{{ estudianteSeleccionado.contacto_telefono }}</strong></div>
+              </div>
+              <div v-else class="text-caption text-grey-5 italic q-mt-xs">
+                No hay contacto de referencia familiar registrado para este estudiante.
+              </div>
+            </div>
+            <div v-if="estudianteSeleccionado.contacto_telefono">
+              <q-btn
+                type="a"
+                :href="`tel:${estudianteSeleccionado.contacto_telefono}`"
+                color="positive" icon="call" label="Llamar Familiar" unelevated size="sm" class="action-btn"
+              />
             </div>
           </div>
 
@@ -636,6 +666,12 @@ onMounted(() => {
 .accion-banner {
   background: rgba(16, 185, 129, 0.08);
   border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+}
+
+.contacto-card {
+  background: rgba(30, 58, 138, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 12px;
 }
 

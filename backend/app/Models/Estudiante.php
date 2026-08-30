@@ -11,6 +11,7 @@ class Estudiante extends Model
     protected $fillable = [
         'carnet', 'primer_apellido', 'segundo_apellido', 'nombres', 'email',
         'carrera_id', 'activo',
+        'contacto_nombre', 'contacto_parentesco', 'contacto_telefono',
     ];
 
     protected $casts = ['activo' => 'boolean'];

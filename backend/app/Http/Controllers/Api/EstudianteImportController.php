@@ -94,6 +94,10 @@ class EstudianteImportController extends Controller
                 $primerApellido = trim($this->getVal($row, $headerMap, ['1erapellido', 'primerapellido', 'apellido_paterno', 'apellidopaterno', 'd']));
                 $segundoApellido = trim($this->getVal($row, $headerMap, ['2doapellido', 'segundoapellido', 'apellido_materno', 'apellidomaterno', 'e']));
 
+                $contactoNombre = trim($this->getVal($row, $headerMap, ['contactonombre', 'nombrecontacto', 'apoderado', 'contacto']));
+                $contactoParentesco = trim($this->getVal($row, $headerMap, ['contactoparentesco', 'parentesco', 'relacion']));
+                $contactoTelefono = trim($this->getVal($row, $headerMap, ['contactotelefono', 'telefonocontacto', 'celularcontacto', 'telefono', 'celular']));
+
                 // Mantener el código de materia actual en caso de filas agrupadas
                 if (!empty($materiaCodigo)) {
                     $materiaCodigoActual = $materiaCodigo;
@@ -109,19 +113,25 @@ class EstudianteImportController extends Controller
                 $estudiante = Estudiante::where('carnet', $carnet)->first();
                 if (!$estudiante) {
                     $estudiante = Estudiante::create([
-                        'carnet'           => $carnet,
-                        'primer_apellido'  => $primerApellido ?: 'S/A',
-                        'segundo_apellido' => $segundoApellido ?: '',
-                        'nombres'          => $nombres,
-                        'carrera_id'       => $carrera->id,
+                        'carnet'              => $carnet,
+                        'primer_apellido'     => $primerApellido ?: 'S/A',
+                        'segundo_apellido'    => $segundoApellido ?: '',
+                        'nombres'             => $nombres,
+                        'carrera_id'          => $carrera->id,
+                        'contacto_nombre'     => $contactoNombre ?: null,
+                        'contacto_parentesco' => $contactoParentesco ?: null,
+                        'contacto_telefono'   => $contactoTelefono ?: null,
                     ]);
                     $estudiantesCreados++;
                 } else {
-                    // Actualizar apellidos/nombres si vinieron nuevos
+                    // Actualizar apellidos/nombres/contacto si vinieron nuevos
                     $estudiante->update([
-                        'primer_apellido'  => $primerApellido ?: $estudiante->primer_apellido,
-                        'segundo_apellido' => $segundoApellido ?: $estudiante->segundo_apellido,
-                        'nombres'          => $nombres ?: $estudiante->nombres,
+                        'primer_apellido'     => $primerApellido ?: $estudiante->primer_apellido,
+                        'segundo_apellido'    => $segundoApellido ?: $estudiante->segundo_apellido,
+                        'nombres'             => $nombres ?: $estudiante->nombres,
+                        'contacto_nombre'     => $contactoNombre ?: $estudiante->contacto_nombre,
+                        'contacto_parentesco' => $contactoParentesco ?: $estudiante->contacto_parentesco,
+                        'contacto_telefono'   => $contactoTelefono ?: $estudiante->contacto_telefono,
                     ]);
                 }
 

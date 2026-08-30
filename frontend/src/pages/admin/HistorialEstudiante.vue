@@ -96,6 +96,11 @@
                 <div class="text-h6 text-weight-bold text-white">{{ estudianteData.nombre_completo }}</div>
                 <div class="text-caption text-indigo-3 font-mono">Carnet / CI: {{ estudianteData.carnet }}</div>
                 <div class="text-caption text-grey-4">Carrera: {{ estudianteData.carrera }}</div>
+                <div v-if="estudianteData.contacto_telefono" class="text-caption text-positive font-weight-medium flex items-center gap-1 q-mt-xs">
+                  <q-icon name="phone" size="14px" />
+                  <span>Contacto: <strong>{{ estudianteData.contacto_nombre }}</strong><span v-if="estudianteData.contacto_parentesco"> ({{ estudianteData.contacto_parentesco }})</span>:</span>
+                  <a :href="`tel:${estudianteData.contacto_telefono}`" class="text-blue-3 text-weight-bold text-decoration-none">{{ estudianteData.contacto_telefono }}</a>
+                </div>
               </div>
             </div>
 
@@ -268,6 +273,10 @@
               <div class="info-box q-mb-md">
                 <div class="text-subtitle2 text-weight-bold text-white">{{ estudianteData.nombre_completo }}</div>
                 <div class="text-caption text-indigo-3">CI: {{ estudianteData.carnet }} · Carrera: {{ estudianteData.carrera }}</div>
+                <div v-if="estudianteData.contacto_telefono" class="text-caption text-positive font-weight-medium q-mt-xs">
+                  📞 Referencia Familiar: <strong>{{ estudianteData.contacto_nombre }}</strong><span v-if="estudianteData.contacto_parentesco"> ({{ estudianteData.contacto_parentesco }})</span>:
+                  <a :href="`tel:${estudianteData.contacto_telefono}`" class="text-blue-3 text-weight-bold text-decoration-none q-ml-xs">{{ estudianteData.contacto_telefono }}</a>
+                </div>
               </div>
 
               <!-- Datos de Clase -->

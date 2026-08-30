@@ -19,12 +19,15 @@ class EstudianteController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'carnet'           => 'required|unique:estudiantes',
-            'primer_apellido'  => 'required',
-            'segundo_apellido' => 'nullable',
-            'nombres'          => 'required',
-            'email'            => 'nullable|email',
-            'carrera_id'       => 'required|exists:carreras,id',
+            'carnet'              => 'required|unique:estudiantes',
+            'primer_apellido'     => 'required',
+            'segundo_apellido'    => 'nullable',
+            'nombres'             => 'required',
+            'email'               => 'nullable|email',
+            'carrera_id'          => 'required|exists:carreras,id',
+            'contacto_nombre'     => 'nullable|string|max:255',
+            'contacto_parentesco' => 'nullable|string|max:100',
+            'contacto_telefono'   => 'nullable|string|max:50',
         ]);
         return Estudiante::create($data)->load('carrera');
     }
@@ -34,11 +37,15 @@ class EstudianteController extends Controller
     public function update(Request $request, Estudiante $estudiante)
     {
         $estudiante->update($request->validate([
-            'primer_apellido'  => 'required',
-            'segundo_apellido' => 'nullable',
-            'nombres'          => 'required',
-            'email'            => 'nullable|email',
-            'activo'           => 'boolean',
+            'primer_apellido'     => 'required',
+            'segundo_apellido'    => 'nullable',
+            'nombres'             => 'required',
+            'email'               => 'nullable|email',
+            'carrera_id'          => 'nullable|exists:carreras,id',
+            'activo'              => 'boolean',
+            'contacto_nombre'     => 'nullable|string|max:255',
+            'contacto_parentesco' => 'nullable|string|max:100',
+            'contacto_telefono'   => 'nullable|string|max:50',
         ]));
         return $estudiante->load('carrera');
     }
