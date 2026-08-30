@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between flex-wrap gap-3 q-mb-xl fade-in-up">
       <div>
         <h2 class="page-title">Historial de Asistencia por Estudiante</h2>
-        <p class="page-subtitle">Consultar registros, asistencias, faltas y fechas no marcadas por justificación docente</p>
+        <p class="page-subtitle">Consultar registros, asistencias, faltas, notificaciones y fechas no marcadas por docente</p>
       </div>
 
       <!-- Filtros -->
@@ -121,8 +121,8 @@
                 </div>
                 <div class="col-6 col-sm-2-4">
                   <div class="stat-mini-card info text-center">
-                    <div class="stat-num">{{ estadisticas.omitidas || 0 }}</div>
-                    <div class="stat-text">No Marcadas</div>
+                    <div class="stat-num">{{ estadisticas.notificados || 0 }}</div>
+                    <div class="stat-text">Notificados</div>
                   </div>
                 </div>
                 <div class="col-6 col-sm-2-4">
@@ -168,20 +168,9 @@
 
               <template #body-cell-estado="props">
                 <q-td :props="props" align="center">
-                  <!-- Evento Notificación Director -->
-                  <q-chip
-                    v-if="props.row.estado === 'notificacion'"
-                    dense
-                    color="purple-9"
-                    text-color="white"
-                    class="text-weight-bold"
-                    icon="phone_in_talk"
-                  >
-                    📞 NOTIFICACIÓN DIRECTOR
-                  </q-chip>
                   <!-- Ausente Notificado -->
                   <q-chip
-                    v-else-if="props.row.estado === 'ausente' && props.row.es_notificada"
+                    v-if="props.row.estado === 'ausente' && props.row.es_notificada"
                     dense
                     color="purple-7"
                     text-color="white"
@@ -198,7 +187,7 @@
                     text-color="white"
                     class="text-weight-bold"
                   >
-                    Ausente (Falta Activa)
+                    Ausente
                   </q-chip>
                   <!-- No Marcada -->
                   <q-chip
@@ -231,14 +220,11 @@
 
               <template #body-cell-justificacion="props">
                 <q-td :props="props">
-                  <div v-if="props.row.estado === 'notificacion'" class="text-weight-bold text-purple-3">
-                    📞 Notificación registrada: <span class="text-white">{{ props.row.justificacion }}</span>
+                  <div v-if="props.row.es_notificada" class="text-caption text-purple-3 text-weight-medium">
+                    📞 Notificado el {{ props.row.fecha_notificacion }}
                   </div>
-                  <div v-else-if="props.row.estado === 'omitida'" class="text-weight-medium text-amber-3">
-                    🛑 Motivo docente: <strong>{{ props.row.justificacion }}</strong>
-                  </div>
-                  <div v-else-if="props.row.es_notificada" class="text-caption text-purple-3">
-                    📞 Notificado el {{ props.row.fecha_notificacion }} <span v-if="props.row.observacion_notificacion" class="text-grey-4">({{ props.row.observacion_notificacion }})</span>
+                  <div v-else-if="props.row.estado === 'omitida'" class="text-caption text-amber-3 text-weight-medium">
+                    🛑 {{ props.row.justificacion }}
                   </div>
                   <div v-else-if="props.row.justificacion" class="text-caption text-amber-3">
                     ⚠️ {{ props.row.justificacion }}
@@ -251,9 +237,108 @@
                   </div>
                 </q-td>
               </template>
+
+              <template #body-cell-acciones="props">
+                <q-td :props="props" align="center">
+                  <q-btn
+                    flat round dense icon="visibility" color="blue-4"
+                    @click="verDetalleItem(props.row)"
+                  >
+                    <q-tooltip>Ver detalle completo de fecha, llamada y observaciones</q-tooltip>
+                  </q-btn>
+                </q-td>
+              </template>
             </q-table>
           </q-card-section>
         </q-card>
+
+        <!-- Modal Emergente Ojito (Detalle Completo) -->
+        <q-dialog v-model="modalDetalleItemOpen" persistent>
+          <q-card style="width: 550px; max-width: 95vw;" class="dark-card" v-if="itemSeleccionado">
+            <q-card-section class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <q-icon name="info" color="blue-4" size="26px" />
+                <div class="text-h6 text-weight-bold text-white">Detalle de Registro y Notificación</div>
+              </div>
+              <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+            </q-card-section>
+
+            <q-card-section class="q-pt-none">
+              <!-- Datos de Estudiante -->
+              <div class="info-box q-mb-md">
+                <div class="text-subtitle2 text-weight-bold text-white">{{ estudianteData.nombre_completo }}</div>
+                <div class="text-caption text-indigo-3">CI: {{ estudianteData.carnet }} · Carrera: {{ estudianteData.carrera }}</div>
+              </div>
+
+              <!-- Datos de Clase -->
+              <div class="q-gutter-y-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-grey-4">Materia:</span>
+                  <span class="text-weight-bold text-blue-3">{{ itemSeleccionado.materia_codigo }} - {{ itemSeleccionado.materia_nombre }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-grey-4">Fecha de Clase:</span>
+                  <span class="text-white text-weight-medium">📅 {{ itemSeleccionado.fecha }} ({{ itemSeleccionado.hora_inicio || 'Horario programado' }})</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-grey-4">Docente Registrador:</span>
+                  <span class="text-white">{{ itemSeleccionado.docente_nombre }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-grey-4">Estado de Asistencia:</span>
+                  <q-chip
+                    v-if="itemSeleccionado.es_notificada"
+                    color="purple-7" text-color="white" dense icon="mark_email_read" label="Ausente (Notificado)" size="sm" class="text-weight-bold"
+                  />
+                  <q-chip
+                    v-else-if="itemSeleccionado.estado === 'ausente'"
+                    color="negative" text-color="white" dense icon="cancel" label="Ausente (Falta Activa)" size="sm" class="text-weight-bold"
+                  />
+                  <q-chip
+                    v-else-if="itemSeleccionado.estado === 'presente'"
+                    color="positive" text-color="white" dense icon="check_circle" label="Presente" size="sm" class="text-weight-bold"
+                  />
+                  <q-chip
+                    v-else
+                    color="blue-grey-7" text-color="white" dense icon="info" :label="itemSeleccionado.estado" size="sm" class="text-weight-bold text-capitalize"
+                  />
+                </div>
+              </div>
+
+              <q-separator dark class="q-my-md" />
+
+              <!-- Sección Notificación (Si aplica) -->
+              <div v-if="itemSeleccionado.es_notificada" class="notif-detail-box q-pa-md q-mb-sm">
+                <div class="text-subtitle2 text-weight-bold text-purple-3 flex items-center gap-1 q-mb-xs">
+                  <q-icon name="phone_in_talk" size="18px" /> Detalles de la Notificación / Llamada realizada:
+                </div>
+                <div class="text-caption text-grey-3 q-mb-xs">
+                  <strong>Fecha y Hora de Llamada:</strong> {{ itemSeleccionado.fecha_notificacion }}
+                </div>
+                <div class="text-caption text-grey-3 q-mb-xs" v-if="itemSeleccionado.director_notificacion">
+                  <strong>Registrado por:</strong> {{ itemSeleccionado.director_notificacion }}
+                </div>
+                <div class="text-caption text-grey-2 q-mt-sm">
+                  <strong>Observaciones / Acta Redactada:</strong><br>
+                  <span class="text-white italic font-mono bg-dark-purple q-pa-sm rounded-borders block q-mt-xs">
+                    "{{ itemSeleccionado.observacion_notificacion }}"
+                  </span>
+                </div>
+              </div>
+
+              <!-- Justificación docente -->
+              <div v-if="itemSeleccionado.justificacion && !itemSeleccionado.es_notificada" class="q-mt-sm">
+                <div class="text-caption text-amber-3">
+                  <strong>Nota / Observación Docente:</strong> {{ itemSeleccionado.justificacion }}
+                </div>
+              </div>
+            </q-card-section>
+
+            <q-card-actions align="right" class="q-px-md q-pb-md">
+              <q-btn color="primary" label="Cerrar" v-close-popup unelevated />
+            </q-card-actions>
+          </q-card>
+        </q-dialog>
       </template>
     </template>
   </q-page>
@@ -274,9 +359,12 @@ const fechaFin = ref(hoyStr)
 const materiaSeleccionada = ref(null)
 
 const estudianteData = ref(null)
-const estadisticas = ref({ total_clases: 0, presentes: 0, ausentes: 0, permisos: 0, omitidas: 0, porcentaje: 0 })
+const estadisticas = ref({ total_clases: 0, presentes: 0, ausentes: 0, permisos: 0, omitidas: 0, notificados: 0, porcentaje: 0 })
 const materiasEstudiante = ref([])
 const asistencias = ref([])
+
+const modalDetalleItemOpen = ref(false)
+const itemSeleccionado = ref(null)
 
 const columns = [
   { name: 'fecha', label: 'Fecha / Hora', align: 'left', field: 'fecha', sortable: true },
@@ -284,6 +372,7 @@ const columns = [
   { name: 'estado', label: 'Estado', align: 'center', field: 'estado' },
   { name: 'docente', label: 'Docente Registrador', align: 'left', field: 'docente_nombre' },
   { name: 'justificacion', label: 'Observación / Motivo Docente', align: 'left', field: 'justificacion' },
+  { name: 'acciones', label: 'Detalles', align: 'center' },
 ]
 
 async function cargarHistorial() {
@@ -302,7 +391,7 @@ async function cargarHistorial() {
       }
     })
     estudianteData.value = res.data.estudiante
-    estadisticas.value = res.data.estadisticas || { total_clases: 0, presentes: 0, ausentes: 0, permisos: 0, omitidas: 0, porcentaje: 0 }
+    estadisticas.value = res.data.estadisticas || { total_clases: 0, presentes: 0, ausentes: 0, permisos: 0, omitidas: 0, notificados: 0, porcentaje: 0 }
     materiasEstudiante.value = res.data.materias || []
     asistencias.value = res.data.asistencias || []
 
@@ -316,6 +405,11 @@ async function cargarHistorial() {
   }
 }
 
+function verDetalleItem(item) {
+  itemSeleccionado.value = item
+  modalDetalleItemOpen.value = true
+}
+
 function exportarExcel() {
   if (!estudianteData.value || asistencias.value.length === 0) {
     $q.notify({ type: 'warning', message: 'No hay datos para exportar.' })
@@ -326,11 +420,12 @@ function exportarExcel() {
   csvContent += `HISTORIAL DE ASISTENCIA - ${estudianteData.value.nombre_completo} (CI: ${estudianteData.value.carnet})\n`;
   csvContent += `CARRERA: ${estudianteData.value.carrera}\n`;
   csvContent += `RANGO: ${fechaInicio.value} AL ${fechaFin.value}\n\n`;
-  csvContent += "FECHA,MATERIA CODIGO,MATERIA NOMBRE,ESTADO,DOCENTE REGISTRADOR,OBSERVACION / MOTIVO DOCENTE\n";
+  csvContent += "FECHA,MATERIA CODIGO,MATERIA NOMBRE,ESTADO,DOCENTE REGISTRADOR,FECHA NOTIFICACION,OBSERVACION / MOTIVO\n";
 
   asistencias.value.forEach(a => {
-    const estadoTexto = a.estado === 'omitida' ? 'NO MARCADA (JUSTIFICADA)' : a.estado.toUpperCase();
-    csvContent += `"${a.fecha}","${a.materia_codigo}","${a.materia_nombre}","${estadoTexto}","${a.docente_nombre}","${a.justificacion || ''}"\n`;
+    const estadoTexto = a.es_notificada ? 'NOTIFICADO' : a.estado === 'omitida' ? 'NO MARCADA (JUSTIFICADA)' : a.estado.toUpperCase();
+    const notifInfo = a.es_notificada ? `Notificado ${a.fecha_notificacion}: ${a.observacion_notificacion}` : '';
+    csvContent += `"${a.fecha}","${a.materia_codigo}","${a.materia_nombre}","${estadoTexto}","${a.docente_nombre}","${a.fecha_notificacion || ''}","${a.justificacion || notifInfo}"\n`;
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -355,9 +450,9 @@ function exportarPDF() {
 
   let rowsHtml = '';
   asistencias.value.forEach(a => {
-    const badgeClass = a.estado === 'presente' ? 'badge-success' : a.estado === 'permiso' ? 'badge-warning' : a.estado === 'omitida' ? 'badge-info' : 'badge-danger';
-    const estadoTexto = a.estado === 'omitida' ? 'NO MARCADA' : a.estado.toUpperCase();
-    const observacionTexto = a.estado === 'omitida' ? `<span style="color:#d97706; font-weight:600;">🛑 Motivo docente: ${a.justificacion}</span>` : (a.justificacion || '<span style="color:#94a3b8">Sin observación</span>');
+    const badgeClass = a.es_notificada ? 'badge-purple' : a.estado === 'presente' ? 'badge-success' : a.estado === 'permiso' ? 'badge-warning' : a.estado === 'omitida' ? 'badge-info' : 'badge-danger';
+    const estadoTexto = a.es_notificada ? 'NOTIFICADO' : a.estado === 'omitida' ? 'NO MARCADA' : a.estado.toUpperCase();
+    const observacionTexto = a.es_notificada ? `<span style="color:#7e22ce; font-weight:600;">📞 Notificado el ${a.fecha_notificacion} (${a.observacion_notificacion})</span>` : a.estado === 'omitida' ? `<span style="color:#d97706; font-weight:600;">🛑 Motivo docente: ${a.justificacion}</span>` : (a.justificacion || '<span style="color:#94a3b8">Sin observación</span>');
 
     rowsHtml += `
       <tr>
@@ -392,6 +487,7 @@ function exportarPDF() {
         td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
         tr:nth-child(even) { background: #f8fafc; }
         .badge-success { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        .badge-purple { background: #f3e8ff; color: #6b21a8; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
         .badge-danger { background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
         .badge-warning { background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
         .badge-info { background: #e2e8f0; color: #334155; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
@@ -431,8 +527,8 @@ function exportarPDF() {
           <div class="stat-lbl">Faltas</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" style="color: #64748b;">${estadisticas.value.omitidas || 0}</div>
-          <div class="stat-lbl">No Marcadas</div>
+          <div class="stat-val" style="color: #7e22ce;">${estadisticas.value.notificados || 0}</div>
+          <div class="stat-lbl">Notificados</div>
         </div>
         <div class="stat-box">
           <div class="stat-val" style="color: #d97706;">${estadisticas.value.porcentaje}%</div>
@@ -447,7 +543,7 @@ function exportarPDF() {
             <th>Materia</th>
             <th style="text-align: center;">Estado</th>
             <th>Docente Registrador</th>
-            <th>Observación / Motivo Docente</th>
+            <th>Observación / Motivo</th>
           </tr>
         </thead>
         <tbody>
@@ -488,7 +584,18 @@ onMounted(cargarHistorial)
   &.danger { border-color: rgba(239, 68, 68, 0.3); .stat-num { color: #f87171; } }
   &.warning { border-color: rgba(245, 158, 11, 0.3); .stat-num { color: #fbbf24; } }
   &.total { border-color: rgba(59, 130, 246, 0.3); .stat-num { color: #60a5fa; } }
-  &.info { border-color: rgba(148, 163, 184, 0.3); .stat-num { color: #cbd5e1; } }
+  &.info { border-color: rgba(147, 51, 234, 0.3); .stat-num { color: #c084fc; } }
+}
+
+.notif-detail-box {
+  background: rgba(147, 51, 234, 0.1);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  border-radius: 12px;
+}
+
+.bg-dark-purple {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(147, 51, 234, 0.2);
 }
 
 .action-btn {
@@ -506,5 +613,12 @@ onMounted(cargarHistorial)
   background: rgba(15, 23, 42, 0.95) !important;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 16px;
+}
+
+.info-box {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 12px 16px;
+  border-radius: 10px;
 }
 </style>

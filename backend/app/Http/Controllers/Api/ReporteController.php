@@ -633,21 +633,22 @@ class ReporteController extends Controller
             }
 
             return [
-                'id'                     => $a->id,
-                'inscripcion_id'         => $a->inscripcion_id,
-                'fecha'                  => $fechaObj ? $fechaObj->format('d/m/Y') : '',
-                'fecha_iso'              => $fechaObj ? $fechaObj->toDateString() : '',
-                'materia_codigo'         => $a->inscripcion->materia->codigo ?? '',
-                'materia_nombre'         => $a->inscripcion->materia->nombre ?? '',
-                'estado'                 => $a->estado,
-                'es_retroactiva'         => (bool)$a->es_retroactiva,
-                'justificacion'          => $a->justificacion_retroactiva,
-                'docente_nombre'         => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
-                'hora_inicio'            => $a->horario->hora_inicio ?? '',
-                'aula'                   => $a->horario->aula ?? '',
-                'es_notificada'          => (bool)$accionRelacionada,
-                'fecha_notificacion'     => $accionRelacionada?->fecha_accion ? $accionRelacionada->fecha_accion->format('d/m/Y H:i') : null,
+                'id'                      => $a->id,
+                'inscripcion_id'          => $a->inscripcion_id,
+                'fecha'                   => $fechaObj ? $fechaObj->format('d/m/Y') : '',
+                'fecha_iso'               => $fechaObj ? $fechaObj->toDateString() : '',
+                'materia_codigo'          => $a->inscripcion->materia->codigo ?? '',
+                'materia_nombre'          => $a->inscripcion->materia->nombre ?? '',
+                'estado'                  => $a->estado,
+                'es_retroactiva'          => (bool)$a->es_retroactiva,
+                'justificacion'           => $a->justificacion_retroactiva,
+                'docente_nombre'          => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
+                'hora_inicio'             => $a->horario->hora_inicio ?? '',
+                'aula'                    => $a->horario->aula ?? '',
+                'es_notificada'           => (bool)$accionRelacionada,
+                'fecha_notificacion'      => $accionRelacionada?->fecha_accion ? $accionRelacionada->fecha_accion->format('d/m/Y H:i') : null,
                 'observacion_notificacion'=> $accionRelacionada?->observacion,
+                'director_notificacion'   => $accionRelacionada?->admin ? "{$accionRelacionada->admin->nombre} {$accionRelacionada->admin->apellido}" : 'Director de Carrera',
             ];
         });
 
@@ -680,28 +681,9 @@ class ReporteController extends Controller
             ];
         });
 
-        $accionesMapped = $accionesTomadas->map(function ($acc) {
-            $fechaObj = $acc->fecha_accion;
-            return [
-                'id'             => 'accion_' . $acc->id,
-                'fecha'          => $fechaObj ? $fechaObj->format('d/m/Y') : '',
-                'fecha_hora'     => $fechaObj ? $fechaObj->format('d/m/Y H:i') : '',
-                'fecha_iso'      => $fechaObj ? $fechaObj->toDateTimeString() : '',
-                'materia_codigo' => $acc->inscripcion->materia->codigo ?? '',
-                'materia_nombre' => $acc->inscripcion->materia->nombre ?? '',
-                'estado'         => 'notificacion',
-                'es_retroactiva' => false,
-                'justificacion'  => $acc->observacion,
-                'docente_nombre' => $acc->admin ? "{$acc->admin->nombre} {$acc->admin->apellido} (Director)" : 'Director de Carrera',
-                'hora_inicio'    => $fechaObj ? $fechaObj->format('H:i') : '',
-                'aula'           => 'Dirección',
-            ];
-        });
-
-        // Combinar todas las listas (asistencias, omitidas y notificaciones) y ordenar por fecha descendente
+        // Combinar asistencias y omitidas ordenadas por fecha descendente
         $todosLosRegistros = $asistenciasMapped
             ->concat($omitidasMapped)
-            ->concat($accionesMapped)
             ->sortByDesc('fecha_iso')
             ->values();
 
