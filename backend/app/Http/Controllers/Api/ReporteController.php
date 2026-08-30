@@ -149,7 +149,7 @@ class ReporteController extends Controller
     }
 
     /**
-     * Estudiantes con más de N faltas (por defecto >2) en el periodo activo.
+     * Estudiantes con más de N faltas ACTIVAS acumuladas (después de la última notificación/acción tomada).
      */
     public function estudiantesConFaltas(Request $request)
     {
@@ -159,13 +159,9 @@ class ReporteController extends Controller
         $isSuperAdmin = $admin ? (bool)$admin->super_admin : true;
         $carreraId = $request->query('carrera_id') ?: ($isSuperAdmin ? null : $admin?->carrera_id);
 
-        $query = Inscripcion::with(['estudiante.carrera', 'materia.carrera'])
+        $query = Inscripcion::with(['estudiante.carrera', 'materia.carrera', 'accionesFaltas.admin'])
             ->select('inscripciones.*')
-            ->join('materias', 'materias.id', '=', 'inscripciones.materia_id')
-            ->withCount(['asistencias as total_faltas' => function ($q) {
-                $q->where('estado', 'ausente');
-            }])
-            ->having('total_faltas', '>=', $limite);
+            ->join('materias', 'materias.id', '=', 'inscripciones.materia_id');
 
         if ($materiaId) {
             $query->where('inscripciones.materia_id', $materiaId);
@@ -175,42 +171,206 @@ class ReporteController extends Controller
             $query->where('materias.carrera_id', $carreraId);
         }
 
-        $inscripciones = $query->orderBy('total_faltas', 'desc')->get();
+        $inscripciones = $query->get();
 
         $resultado = $inscripciones->map(function ($insc) {
+            $ultimaAccion = $insc->ultimaAccionFalta();
+            $totalFaltasActivas = $insc->contarFaltasActivas();
+            $totalFaltasHistoricas = $insc->asistencias()->where('estado', 'ausente')->count();
+
             $fechasFaltas = $insc->asistencias()
                 ->where('estado', 'ausente')
                 ->with(['horario.docente'])
                 ->orderBy('fecha', 'desc')
                 ->get()
-                ->map(function ($a) {
+                ->map(function ($a) use ($ultimaAccion) {
                     $fechaObj = $a->fecha ? Carbon::parse($a->fecha) : null;
+                    $esNotificada = false;
+                    if ($ultimaAccion && $fechaObj) {
+                        $esNotificada = $fechaObj->toDateString() <= $ultimaAccion->fecha_accion->toDateString();
+                    }
+
                     return [
+                        'id'             => $a->id,
                         'fecha'          => $fechaObj ? $fechaObj->format('d/m/Y') : '',
                         'fecha_iso'      => $fechaObj ? $fechaObj->toDateString() : '',
                         'docente_nombre' => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
                         'es_retroactiva' => (bool)$a->es_retroactiva,
                         'justificacion'  => $a->justificacion_retroactiva,
+                        'es_notificada'  => $esNotificada,
                     ];
                 });
 
+            $accionesTomadas = $insc->accionesFaltas
+                ->sortByDesc('fecha_accion')
+                ->map(function ($acc) {
+                    return [
+                        'id'           => $acc->id,
+                        'fecha_accion' => $acc->fecha_accion ? $acc->fecha_accion->format('d/m/Y H:i') : '',
+                        'observacion'  => $acc->observacion,
+                        'admin_nombre' => $acc->admin ? "{$acc->admin->nombre} {$acc->admin->apellido}" : 'Director de Carrera',
+                    ];
+                })->values();
+
             return [
-                'inscripcion_id'      => $insc->id,
-                'estudiante_carnet'   => $insc->estudiante->carnet ?? '',
-                'estudiante_nombre'   => trim(($insc->estudiante->primer_apellido ?? '') . ' ' . ($insc->estudiante->segundo_apellido ?? '') . ' ' . ($insc->estudiante->nombres ?? '')),
-                'carrera'             => $insc->estudiante->carrera->nombre ?? '',
-                'materia_codigo'      => $insc->materia->codigo ?? '',
-                'materia_nombre'      => $insc->materia->nombre ?? '',
-                'total_faltas'        => $insc->total_faltas,
-                'fechas_faltas'       => $fechasFaltas,
+                'inscripcion_id'         => $insc->id,
+                'estudiante_id'          => $insc->estudiante_id,
+                'estudiante_carnet'      => $insc->estudiante->carnet ?? '',
+                'estudiante_nombre'      => trim(($insc->estudiante->primer_apellido ?? '') . ' ' . ($insc->estudiante->segundo_apellido ?? '') . ' ' . ($insc->estudiante->nombres ?? '')),
+                'carrera'                => $insc->estudiante->carrera->nombre ?? '',
+                'materia_id'             => $insc->materia_id,
+                'materia_codigo'         => $insc->materia->codigo ?? '',
+                'materia_nombre'         => $insc->materia->nombre ?? '',
+                'total_faltas'           => $totalFaltasActivas,
+                'total_faltas_historicas' => $totalFaltasHistoricas,
+                'estado_inscripcion'     => $insc->estado,
+                'fecha_abandono'         => $insc->fecha_abandono ? $insc->fecha_abandono->format('d/m/Y H:i') : null,
+                'motivo_abandono'        => $insc->motivo_abandono,
+                'fechas_faltas'          => $fechasFaltas,
+                'acciones_tomadas'       => $accionesTomadas,
+                'tiene_notificacion'     => $accionesTomadas->count() > 0,
             ];
         });
 
+        // Filtrar por umbral de faltas activas
+        $filtrado = $resultado->filter(fn($item) => $item['total_faltas'] >= $limite)->values();
+
         return response()->json([
             'limite'      => $limite,
-            'total'       => $resultado->count(),
-            'estudiantes' => $resultado,
+            'total'       => $filtrado->count(),
+            'estudiantes' => $filtrado,
         ]);
+    }
+
+    /**
+     * Registra una Acción Tomada (Notificación) por el Director de Carrera para reiniciar faltas activas.
+     */
+    public function registrarAccionTomada(Request $request, $inscripcionId)
+    {
+        $request->validate([
+            'observacion' => 'required|string|min:5|max:2000',
+        ]);
+
+        $inscripcion = Inscripcion::findOrFail($inscripcionId);
+        $admin = $request->user();
+
+        $accion = \App\Models\AccionFalta::create([
+            'inscripcion_id' => $inscripcion->id,
+            'fecha_accion'   => Carbon::now(),
+            'observacion'    => $request->observacion,
+            'admin_id'       => $admin?->id,
+        ]);
+
+        return response()->json([
+            'message' => '✅ Acción tomada / Notificación registrada exitosamente. El contador de faltas para este estudiante se ha actualizado.',
+            'accion'  => $accion,
+        ]);
+    }
+
+    /**
+     * Retorna todas las materias inscritas por un estudiante con su estado de abandono.
+     */
+    public function inscripcionesAbandono(Request $request, $estudianteId)
+    {
+        $estudiante = \App\Models\Estudiante::with('carrera')->findOrFail($estudianteId);
+        $inscripciones = Inscripcion::with('materia')
+            ->where('estudiante_id', $estudiante->id)
+            ->get()
+            ->map(function ($i) {
+                return [
+                    'inscripcion_id'  => $i->id,
+                    'materia_id'      => $i->materia_id,
+                    'materia_codigo'  => $i->materia->codigo,
+                    'materia_nombre'  => $i->materia->nombre,
+                    'estado'          => $i->estado,
+                    'es_abandono'     => $i->estado === 'abandono',
+                    'motivo_abandono' => $i->motivo_abandono,
+                ];
+            });
+
+        $totalInscritas = $inscripciones->count();
+        $totalAbandono  = $inscripciones->where('es_abandono', true)->count();
+
+        return response()->json([
+            'estudiante' => [
+                'id'              => $estudiante->id,
+                'carnet'          => $estudiante->carnet,
+                'nombre_completo' => trim("{$estudiante->primer_apellido} {$estudiante->segundo_apellido} {$estudiante->nombres}"),
+                'carrera'         => $estudiante->carrera->nombre ?? '',
+            ],
+            'inscripciones'   => $inscripciones,
+            'es_abandono_total' => $totalInscritas > 0 && $totalInscritas === $totalAbandono,
+            'es_abandono_parcial' => $totalAbandono > 0 && $totalAbandono < $totalInscritas,
+        ]);
+    }
+
+    /**
+     * Permite al Director de Carrera cambiar el estado de un estudiante a Abandono (Total o Parcial).
+     */
+    public function cambiarAbandono(Request $request, $estudianteId)
+    {
+        $request->validate([
+            'tipo_abandono' => 'required|in:total,parcial,restablecer',
+            'materia_ids'   => 'nullable|array',
+            'motivo'        => 'nullable|string|max:500',
+        ]);
+
+        $estudiante = \App\Models\Estudiante::findOrFail($estudianteId);
+        $inscripciones = Inscripcion::where('estudiante_id', $estudiante->id)->get();
+
+        DB::beginTransaction();
+        try {
+            if ($request->tipo_abandono === 'total') {
+                foreach ($inscripciones as $i) {
+                    $i->update([
+                        'estado'          => 'abandono',
+                        'fecha_abandono'  => Carbon::now(),
+                        'motivo_abandono' => $request->motivo ?: 'Abandono Total de Carrera',
+                    ]);
+                }
+                $msg = '✅ El estudiante ha sido registrado en ABANDONO TOTAL para todas sus materias.';
+            } elseif ($request->tipo_abandono === 'parcial') {
+                $materiaIdsAbandono = $request->materia_ids ?: [];
+                foreach ($inscripciones as $i) {
+                    if (in_array($i->materia_id, $materiaIdsAbandono)) {
+                        $i->update([
+                            'estado'          => 'abandono',
+                            'fecha_abandono'  => Carbon::now(),
+                            'motivo_abandono' => $request->motivo ?: 'Abandono Parcial de Materia',
+                        ]);
+                    } else {
+                        $i->update([
+                            'estado'          => 'activo',
+                            'fecha_abandono'  => null,
+                            'motivo_abandono' => null,
+                        ]);
+                    }
+                }
+                $msg = '✅ El estado de ABANDONO PARCIAL ha sido actualizado para las materias seleccionadas.';
+            } else {
+                // Restablecer a activo
+                foreach ($inscripciones as $i) {
+                    $i->update([
+                        'estado'          => 'activo',
+                        'fecha_abandono'  => null,
+                        'motivo_abandono' => null,
+                    ]);
+                }
+                $msg = '✅ Se ha restablecido al estudiante a estado ACTIVO en todas sus materias.';
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => $msg,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error al actualizar el estado de abandono del estudiante.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

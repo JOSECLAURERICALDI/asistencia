@@ -43,18 +43,22 @@ class AsistenciaController extends Controller
 
         $nomina = $inscripciones->map(function ($insc) use ($fecha, $horarioId) {
             $asistencia = $insc->asistencias->first();
+            $esAbandono = $insc->estado === 'abandono';
             return [
-                'inscripcion_id'  => $insc->id,
-                'estudiante_id'   => $insc->estudiante->id,
-                'carnet'          => $insc->estudiante->carnet,
-                'nombre_completo' => trim("{$insc->estudiante->primer_apellido} {$insc->estudiante->segundo_apellido} {$insc->estudiante->nombres}"),
-                'primer_apellido' => $insc->estudiante->primer_apellido,
-                'segundo_apellido'=> $insc->estudiante->segundo_apellido,
-                'nombres'         => $insc->estudiante->nombres,
-                'estado'          => $asistencia?->estado ?? null,
-                'asistencia_id'   => $asistencia?->id,
-                'es_retroactiva'  => $asistencia?->es_retroactiva ?? false,
-                'justificacion'   => $asistencia?->justificacion_retroactiva,
+                'inscripcion_id'    => $insc->id,
+                'estudiante_id'     => $insc->estudiante->id,
+                'carnet'            => $insc->estudiante->carnet,
+                'nombre_completo'   => trim("{$insc->estudiante->primer_apellido} {$insc->estudiante->segundo_apellido} {$insc->estudiante->nombres}"),
+                'primer_apellido'   => $insc->estudiante->primer_apellido,
+                'segundo_apellido'  => $insc->estudiante->segundo_apellido,
+                'nombres'           => $insc->estudiante->nombres,
+                'estado'            => $asistencia?->estado ?? null,
+                'asistencia_id'     => $asistencia?->id,
+                'es_retroactiva'    => $asistencia?->es_retroactiva ?? false,
+                'justificacion'     => $asistencia?->justificacion_retroactiva,
+                'estado_inscripcion'=> $insc->estado,
+                'es_abandono'       => $esAbandono,
+                'motivo_abandono'   => $insc->motivo_abandono,
             ];
         });
 
@@ -85,6 +89,13 @@ class AsistenciaController extends Controller
             'estado'                   => 'required|in:presente,permiso,ausente',
             'justificacion_retroactiva'=> 'nullable|string|max:500',
         ]);
+
+        $inscripcion = Inscripcion::findOrFail($data['inscripcion_id']);
+        if ($inscripcion->estado === 'abandono') {
+            return response()->json([
+                'message' => 'El estudiante se encuentra en estado de ABANDONO de esta materia. No se puede registrar asistencia.',
+            ], 422);
+        }
 
         $horario = Horario::findOrFail($data['horario_id']);
         $userId = $request->user()?->id ?? $horario->docente_id;
@@ -168,6 +179,12 @@ class AsistenciaController extends Controller
 
         DB::transaction(function () use ($data, $esRetroactiva, $userId) {
             foreach ($data['asistencias'] as $item) {
+                $inscripcion = Inscripcion::find($item['inscripcion_id']);
+                // Omitir registro para inscripciones en abandono
+                if ($inscripcion && $inscripcion->estado === 'abandono') {
+                    continue;
+                }
+
                 Asistencia::updateOrCreate(
                     [
                         'inscripcion_id' => $item['inscripcion_id'],

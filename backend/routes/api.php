@@ -38,6 +38,9 @@ Route::prefix('admin')->group(function () {
     Route::get('dashboard', [ReporteController::class, 'dashboard']);
     Route::get('reportes/docentes-sin-marcar', [ReporteController::class, 'docentesSinMarcar']);
     Route::get('reportes/estudiantes-faltas',  [ReporteController::class, 'estudiantesConFaltas']);
+    Route::post('faltas/{inscripcion_id}/accion-tomar', [ReporteController::class, 'registrarAccionTomada']);
+    Route::get('estudiantes/{id}/inscripciones-abandono', [ReporteController::class, 'inscripcionesAbandono']);
+    Route::post('estudiantes/{id}/cambiar-abandono', [ReporteController::class, 'cambiarAbandono']);
     Route::get('reportes/por-fechas',          [ReporteController::class, 'reportePorFechas']);
     Route::get('reportes/horarios-carrera',    [ReporteController::class, 'horariosPorCarrera']);
     Route::get('reportes/historial-estudiante', [ReporteController::class, 'historialEstudiante']);

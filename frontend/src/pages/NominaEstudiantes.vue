@@ -137,39 +137,46 @@
             <div class="student-name">
               {{ est.primer_apellido }} {{ est.segundo_apellido }}
               <span class="nombres-light">{{ est.nombres }}</span>
+              <q-chip v-if="est.es_abandono" color="negative" text-color="white" dense icon="no_accounts" label="ABANDONO" size="sm" class="q-ml-sm text-weight-bold" />
             </div>
             <div class="student-carnet">
               <q-icon name="badge" size="12px" class="q-mr-xs" />
               {{ est.carnet }}
+              <span v-if="est.motivo_abandono" class="text-red-3 q-ml-xs">({{ est.motivo_abandono }})</span>
             </div>
           </div>
 
           <!-- Toggle de estado -->
           <div class="estado-toggle">
-            <q-btn
-              :class="['estado-btn', { active: est.estadoLocal === 'presente' }]"
-              flat no-caps dense size="sm"
-              label="P"
-              @click="setEstado(est, 'presente')"
-            >
-              <q-tooltip>Presente</q-tooltip>
-            </q-btn>
-            <q-btn
-              :class="['estado-btn permiso-btn', { active: est.estadoLocal === 'permiso' }]"
-              flat no-caps dense size="sm"
-              label="PE"
-              @click="setEstado(est, 'permiso')"
-            >
-              <q-tooltip>Permiso</q-tooltip>
-            </q-btn>
-            <q-btn
-              :class="['estado-btn ausente-btn', { active: est.estadoLocal === 'ausente' }]"
-              flat no-caps dense size="sm"
-              label="A"
-              @click="setEstado(est, 'ausente')"
-            >
-              <q-tooltip>Ausente</q-tooltip>
-            </q-btn>
+            <template v-if="est.es_abandono">
+              <q-chip color="blue-grey-9" text-color="amber-3" dense icon="block" label="Inhabilitado por Abandono" size="sm" class="text-weight-bold" />
+            </template>
+            <template v-else>
+              <q-btn
+                :class="['estado-btn', { active: est.estadoLocal === 'presente' }]"
+                flat no-caps dense size="sm"
+                label="P"
+                @click="setEstado(est, 'presente')"
+              >
+                <q-tooltip>Presente</q-tooltip>
+              </q-btn>
+              <q-btn
+                :class="['estado-btn permiso-btn', { active: est.estadoLocal === 'permiso' }]"
+                flat no-caps dense size="sm"
+                label="PE"
+                @click="setEstado(est, 'permiso')"
+              >
+                <q-tooltip>Permiso</q-tooltip>
+              </q-btn>
+              <q-btn
+                :class="['estado-btn ausente-btn', { active: est.estadoLocal === 'ausente' }]"
+                flat no-caps dense size="sm"
+                label="A"
+                @click="setEstado(est, 'ausente')"
+              >
+                <q-tooltip>Ausente</q-tooltip>
+              </q-btn>
+            </template>
           </div>
 
           <!-- Indicador guardado -->
@@ -232,20 +239,26 @@ const fechaDisplay = computed(() => {
   return `${diasSemana[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]}`
 })
 
-const countPresentes = computed(() => nomina.value.filter(e => e.estadoLocal === 'presente').length)
-const countAusentes = computed(() => nomina.value.filter(e => e.estadoLocal === 'ausente').length)
-const countPermisos = computed(() => nomina.value.filter(e => e.estadoLocal === 'permiso').length)
-const todosMarcados = computed(() => nomina.value.length > 0 && nomina.value.every(e => e.estadoLocal))
+const countPresentes = computed(() => nomina.value.filter(e => !e.es_abandono && e.estadoLocal === 'presente').length)
+const countAusentes = computed(() => nomina.value.filter(e => !e.es_abandono && e.estadoLocal === 'ausente').length)
+const countPermisos = computed(() => nomina.value.filter(e => !e.es_abandono && e.estadoLocal === 'permiso').length)
+const todosMarcados = computed(() => {
+  const activos = nomina.value.filter(e => !e.es_abandono)
+  return activos.length > 0 && activos.every(e => e.estadoLocal)
+})
 
 function setEstado(est, estado) {
+  if (est.es_abandono) return
   est.estadoLocal = estado
   est.guardado = false
 }
 
 function marcarTodos(estado) {
   nomina.value.forEach(e => {
-    e.estadoLocal = estado
-    e.guardado = false
+    if (!e.es_abandono) {
+      e.estadoLocal = estado
+      e.guardado = false
+    }
   })
 }
 

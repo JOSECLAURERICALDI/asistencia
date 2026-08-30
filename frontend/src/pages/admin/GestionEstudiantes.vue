@@ -57,6 +57,9 @@
 
         <template #body-cell-acciones="props">
           <q-td :props="props" align="right">
+            <q-btn flat round dense icon="no_accounts" color="amber-4" @click="abrirModalAbandono(props.row)">
+              <q-tooltip>Gestionar estado de Abandono (Total/Parcial)</q-tooltip>
+            </q-btn>
             <q-btn flat round dense icon="library_add" color="positive" @click="abrirInscribirModal(props.row)">
               <q-tooltip>Inscribir a Materia</q-tooltip>
             </q-btn>
@@ -124,6 +127,67 @@
         <q-card-actions align="right" class="q-px-md q-pb-md">
           <q-btn flat label="Cancelar" color="grey-5" v-close-popup />
           <q-btn color="positive" icon="check" label="Inscribir Estudiante" :loading="savingInscripcion" @click="procesarInscripcion" unelevated />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Modal Gestión de Abandono (Total / Parcial) -->
+    <q-dialog v-model="modalAbandonoOpen" persistent>
+      <q-card style="width: 550px; max-width: 90vw;" class="dark-card">
+        <q-card-section class="flex items-center justify-between">
+          <div class="text-h6 text-weight-bold text-negative flex items-center gap-2">
+            <q-icon name="no_accounts" size="24px" /> Gestión de Estado de Abandono
+          </div>
+          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-pt-none" v-if="estudianteAbandonoInfo">
+          <div class="text-subtitle1 text-weight-bold text-white">
+            {{ estudianteAbandonoInfo.estudiante.nombre_completo }}
+          </div>
+          <div class="text-caption text-grey-4 q-mb-md">
+            CI: {{ estudianteAbandonoInfo.estudiante.carnet }} · {{ estudianteAbandonoInfo.estudiante.carrera }}
+          </div>
+
+          <div class="text-subtitle2 text-grey-3 q-mb-xs">Selecciona el tipo de cambio de estado:</div>
+
+          <q-option-group
+            v-model="tipoAbandonoSeleccionado"
+            :options="[
+              { label: '🔴 Abandono Total (El estudiante abandonó todas sus materias)', value: 'total' },
+              { label: '🟡 Abandono Parcial (Seleccionar materias específicas)', value: 'parcial' },
+              { label: '🟢 Restablecer a Activo (Reactivar todas las materias)', value: 'restablecer' }
+            ]"
+            color="primary"
+            dark
+            class="q-mb-md"
+          />
+
+          <div v-if="tipoAbandonoSeleccionado === 'parcial'" class="q-mb-md">
+            <div class="text-subtitle2 text-amber-3 q-mb-xs">Marcar las materias en las que el estudiante abandonó:</div>
+            <div v-for="inc in estudianteAbandonoInfo.inscripciones" :key="inc.materia_id" class="q-py-xs">
+              <q-checkbox
+                v-model="materiasParcialAbandono"
+                :val="inc.materia_id"
+                :label="`${inc.materia_codigo} - ${inc.materia_nombre}`"
+                dark color="negative"
+              />
+            </div>
+          </div>
+
+          <q-input
+            v-model="motivoAbandonoText"
+            type="textarea"
+            rows="2"
+            label="Motivo o Justificación de Abandono (Opcional)"
+            placeholder="Motivo reportado por el estudiante o dirección..."
+            outlined dark dense
+          />
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat color="grey-4" label="Cancelar" v-close-popup />
+          <q-btn color="negative" label="Confirmar Cambio de Estado" :loading="guardandoAbandono" @click="guardarCambioAbandono" unelevated />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -271,7 +335,7 @@ async function procesarInscripcion() {
   }
 }
 
-function eliminarEstudiante(row) {
+    function eliminarEstudiante(row) {
   $q.dialog({
     title: 'Eliminar Estudiante',
     message: `¿Eliminar a ${row.primer_apellido} ${row.nombres}?`,
@@ -285,6 +349,55 @@ function eliminarEstudiante(row) {
       $q.notify({ type: 'negative', message: 'Error al eliminar.', position: 'top' })
     }
   })
+}
+
+const modalAbandonoOpen = ref(false)
+const estudianteAbandonoInfo = ref(null)
+const tipoAbandonoSeleccionado = ref('total')
+const materiasParcialAbandono = ref([])
+const motivoAbandonoText = ref('')
+const guardandoAbandono = ref(false)
+
+async function abrirModalAbandono(row) {
+  try {
+    const res = await api.get(`/admin/estudiantes/${row.id}/inscripciones-abandono`)
+    estudianteAbandonoInfo.value = res.data
+    materiasParcialAbandono.value = res.data.inscripciones
+      .filter(i => i.es_abandono)
+      .map(i => i.materia_id)
+
+    if (res.data.es_abandono_total) {
+      tipoAbandonoSeleccionado.value = 'total'
+    } else if (res.data.es_abandono_parcial) {
+      tipoAbandonoSeleccionado.value = 'parcial'
+    } else {
+      tipoAbandonoSeleccionado.value = 'total'
+    }
+
+    motivoAbandonoText.value = ''
+    modalAbandonoOpen.value = true
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Error al consultar inscripciones del estudiante.' })
+  }
+}
+
+async function guardarCambioAbandono() {
+  guardandoAbandono.value = true
+  try {
+    const estId = estudianteAbandonoInfo.value.estudiante.id
+    const res = await api.post(`/admin/estudiantes/${estId}/cambiar-abandono`, {
+      tipo_abandono: tipoAbandonoSeleccionado.value,
+      materia_ids: materiasParcialAbandono.value,
+      motivo: motivoAbandonoText.value
+    })
+    $q.notify({ type: 'positive', message: res.data.message })
+    modalAbandonoOpen.value = false
+    cargarEstudiantes()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: 'Error al actualizar estado de abandono.' })
+  } finally {
+    guardandoAbandono.value = false
+  }
 }
 
 onMounted(() => {
