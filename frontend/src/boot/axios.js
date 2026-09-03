@@ -1,7 +1,9 @@
 import axios from 'axios'
 
+const isRemote = typeof window !== 'undefined' && window.location.hostname.includes('xpertiaplus.com')
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: isRemote ? 'https://api.asistencia.xpertiaplus.com/api' : '/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
