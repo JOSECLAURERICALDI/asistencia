@@ -114,13 +114,6 @@ class AsistenciaController extends Controller
 
         $esRetroactiva = $fecha->lessThan($hoy);
 
-        // Si es retroactiva, requiere justificación
-        if ($esRetroactiva && empty($data['justificacion_retroactiva'])) {
-            return response()->json([
-                'message' => 'Debe ingresar una justificación para registrar asistencia en fecha anterior.',
-            ], 422);
-        }
-
         $asistencia = Asistencia::updateOrCreate(
             [
                 'inscripcion_id' => $data['inscripcion_id'],
@@ -130,7 +123,7 @@ class AsistenciaController extends Controller
             [
                 'estado'                     => $data['estado'],
                 'es_retroactiva'             => $esRetroactiva,
-                'justificacion_retroactiva'  => $esRetroactiva ? $data['justificacion_retroactiva'] : null,
+                'justificacion_retroactiva'  => $data['justificacion_retroactiva'] ?? null,
                 'registrado_por'             => $userId,
             ]
         );
@@ -171,12 +164,6 @@ class AsistenciaController extends Controller
 
         $esRetroactiva = $fecha->lessThan($hoy);
 
-        if ($esRetroactiva && empty($data['justificacion_retroactiva'])) {
-            return response()->json([
-                'message' => 'Debe ingresar una justificación para registrar asistencia en fecha anterior.',
-            ], 422);
-        }
-
         DB::transaction(function () use ($data, $esRetroactiva, $userId) {
             foreach ($data['asistencias'] as $item) {
                 $inscripcion = Inscripcion::find($item['inscripcion_id']);
@@ -194,7 +181,7 @@ class AsistenciaController extends Controller
                     [
                         'estado'                    => $item['estado'],
                         'es_retroactiva'            => $esRetroactiva,
-                        'justificacion_retroactiva' => $esRetroactiva ? $data['justificacion_retroactiva'] : null,
+                        'justificacion_retroactiva' => $data['justificacion_retroactiva'] ?? null,
                         'registrado_por'            => $userId,
                     ]
                 );

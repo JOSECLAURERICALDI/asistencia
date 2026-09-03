@@ -24,20 +24,32 @@
           style="font-size: 0.75rem; padding: 6px 14px; border-radius: 20px;"
         />
 
+        <!-- Botón Cambio Modo Claro / Oscuro -->
+        <q-btn
+          flat round
+          :icon="$q.dark.isActive ? 'wb_sunny' : 'dark_mode'"
+          :color="$q.dark.isActive ? 'amber-4' : 'indigo-9'"
+          @click="toggleTheme"
+          size="sm"
+          class="q-mr-sm"
+        >
+          <q-tooltip>{{ $q.dark.isActive ? 'Cambiar a Modo Claro ☀️' : 'Cambiar a Modo Oscuro 🌙' }}</q-tooltip>
+        </q-btn>
+
         <!-- User info -->
         <div class="flex items-center gap-2 q-mr-md">
           <q-avatar size="36px" class="user-avatar">
-            <q-icon name="person" size="20px" color="white" />
+            <q-icon name="person" size="20px" :color="$q.dark.isActive ? 'white' : 'indigo-9'" />
           </q-avatar>
           <div class="gt-xs">
-            <div class="text-white text-weight-medium" style="font-size: 0.85rem; line-height: 1.2;">
+            <div class="text-weight-medium" :class="$q.dark.isActive ? 'text-white' : 'text-dark'" style="font-size: 0.85rem; line-height: 1.2;">
               {{ user?.apellido }} {{ user?.nombre }}
             </div>
-            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">CI: {{ user?.ci }}</div>
+            <div style="font-size: 0.7rem;" :style="$q.dark.isActive ? 'color: rgba(255,255,255,0.5);' : 'color: #64748b;'">CI: {{ user?.ci }}</div>
           </div>
         </div>
 
-        <q-btn flat round icon="logout" color="white" @click="handleLogout" size="sm">
+        <q-btn flat round icon="logout" :color="$q.dark.isActive ? 'white' : 'dark'" @click="handleLogout" size="sm">
           <q-tooltip>Cerrar sesión</q-tooltip>
         </q-btn>
       </q-toolbar>
@@ -51,7 +63,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from 'stores/auth'
 import { useQuasar } from 'quasar'
@@ -68,6 +80,18 @@ const ahora = new Date()
 const diaHoy = computed(() => diasSemana[ahora.getDay()].charAt(0).toUpperCase() + diasSemana[ahora.getDay()].slice(1))
 const fechaHoy = computed(() => `${ahora.getDate()} de ${meses[ahora.getMonth()]} ${ahora.getFullYear()}`)
 
+function toggleTheme() {
+  $q.dark.toggle()
+  localStorage.setItem('theme_dark', $q.dark.isActive ? 'true' : 'false')
+}
+
+onMounted(() => {
+  const saved = localStorage.getItem('theme_dark')
+  if (saved !== null) {
+    $q.dark.set(saved === 'true')
+  }
+})
+
 async function handleLogout() {
   $q.dialog({
     title: 'Cerrar sesión',
@@ -75,7 +99,7 @@ async function handleLogout() {
     cancel: true,
     ok: { label: 'Sí, salir', color: 'negative', flat: true },
     cancel: { label: 'Cancelar', flat: true },
-    dark: true,
+    dark: $q.dark.isActive,
   }).onOk(() => {
     authStore.logout()
     router.push({ name: 'login' })

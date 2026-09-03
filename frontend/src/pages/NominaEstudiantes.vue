@@ -23,34 +23,33 @@
       </div>
     </div>
 
-    <!-- Banner retroactivo -->
+    <!-- Banner retroactivo (opcional) -->
     <q-banner v-if="esRetroactiva" class="retroactive-banner q-mb-lg" rounded>
       <template #avatar>
-        <q-icon name="history" color="orange-4" size="22px" />
+        <q-icon name="history" color="blue-4" size="22px" />
       </template>
       <div>
-        <div class="text-weight-bold" style="color: #fcd34d; font-size: 0.9rem;">Registro Retroactivo</div>
-        <div style="font-size: 0.8rem; color: #fde68a;">Esta asistencia es de un día anterior. Deberás ingresar una justificación antes de guardar.</div>
+        <div class="text-weight-bold text-blue-3" style="font-size: 0.9rem;">Registro Retroactivo</div>
+        <div style="font-size: 0.8rem; color: #93c5fd;">Esta asistencia corresponde a una fecha anterior. Puedes ingresar una observación o guardar directamente.</div>
       </div>
     </q-banner>
 
-    <!-- Justificación retroactiva (si aplica) -->
+    <!-- Justificación retroactiva opcional -->
     <q-card v-if="esRetroactiva" class="glass-card q-mb-lg fade-in-up" flat>
       <q-card-section>
         <div class="flex items-center gap-2 q-mb-sm">
-          <q-icon name="edit_note" color="orange-4" size="20px" />
-          <span class="text-weight-semibold" style="color: #fcd34d;">Justificación requerida</span>
-          <q-chip size="sm" color="orange" text-color="white" label="Obligatoria" />
+          <q-icon name="edit_note" color="blue-4" size="20px" />
+          <span class="text-weight-semibold text-blue-3">Justificación / Motivo</span>
+          <q-chip size="sm" color="blue-7" text-color="white" label="Opcional" />
         </div>
         <q-input
           v-model="justificacion"
           type="textarea"
-          placeholder="Explica por qué estás registrando la asistencia en una fecha anterior (ej: 'Sistema no disponible el día de la clase', 'Registro olvidado')..."
+          placeholder="Motivo u observación del registro retroactivo (Opcional)..."
           outlined dark
-          :rows="3"
+          :rows="2"
           counter
           maxlength="500"
-          :rules="[val => esRetroactiva ? (!!val?.trim() || 'La justificación es obligatoria para registros retroactivos') : true]"
           class="justif-input"
         />
       </q-card-section>
@@ -282,15 +281,6 @@ async function cargarNomina() {
 }
 
 async function guardarMasivo() {
-  if (esRetroactiva.value && !justificacion.value?.trim()) {
-    $q.notify({
-      type: 'warning',
-      message: 'Debes ingresar una justificación para el registro retroactivo.',
-      position: 'top',
-    })
-    return
-  }
-
   saving.value = true
   try {
     await api.post('/docente/asistencia/masivo', {

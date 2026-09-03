@@ -49,15 +49,27 @@
     <!-- Header -->
     <q-header elevated class="header-glass">
       <q-toolbar class="q-px-lg" style="height: 64px;">
-        <q-btn flat round dense icon="menu" color="white" @click="leftDrawerOpen = !leftDrawerOpen" class="q-mr-sm" />
+        <q-btn flat round dense icon="menu" :color="$q.dark.isActive ? 'white' : 'dark'" @click="leftDrawerOpen = !leftDrawerOpen" class="q-mr-sm" />
 
-        <div class="text-weight-semibold text-white" style="font-size: 1rem;">
+        <div class="text-weight-semibold" :class="$q.dark.isActive ? 'text-white' : 'text-dark'" style="font-size: 1rem;">
           {{ currentPageTitle }}
         </div>
 
         <q-space />
 
         <div class="flex items-center gap-2">
+          <!-- Botón Cambio Modo Claro / Oscuro -->
+          <q-btn
+            flat round
+            :icon="$q.dark.isActive ? 'wb_sunny' : 'dark_mode'"
+            :color="$q.dark.isActive ? 'amber-4' : 'indigo-9'"
+            @click="toggleTheme"
+            size="sm"
+            class="q-mr-xs"
+          >
+            <q-tooltip>{{ $q.dark.isActive ? 'Cambiar a Modo Claro ☀️' : 'Cambiar a Modo Oscuro 🌙' }}</q-tooltip>
+          </q-btn>
+
           <!-- Botón Importar Estudiantes -->
           <q-btn
             no-caps
@@ -81,8 +93,8 @@
           />
 
           <div class="flex items-center gap-2 gt-sm q-ml-sm">
-            <q-icon name="calendar_today" color="blue-3" size="18px" />
-            <span style="color: #93c5fd; font-size: 0.85rem;">{{ fechaHoy }}</span>
+            <q-icon name="calendar_today" color="blue-4" size="18px" />
+            <span style="font-size: 0.85rem;" :style="$q.dark.isActive ? 'color: #93c5fd;' : 'color: #1e40af;'">{{ fechaHoy }}</span>
           </div>
         </div>
       </q-toolbar>
@@ -439,6 +451,11 @@ async function procesarImportacionEstudiantes() {
   }
 }
 
+function toggleTheme() {
+  $q.dark.toggle()
+  localStorage.setItem('theme_dark', $q.dark.isActive ? 'true' : 'false')
+}
+
 function handleLogout() {
   $q.dialog({
     title: 'Cerrar sesión',
@@ -446,14 +463,20 @@ function handleLogout() {
     cancel: true,
     ok: { label: 'Sí, salir', color: 'negative', flat: true },
     cancel: { label: 'Cancelar', flat: true },
-    dark: true,
+    dark: $q.dark.isActive,
   }).onOk(() => {
     authStore.logout()
     router.push({ name: 'login-admin' })
   })
 }
 
-onMounted(cargarCarreras)
+onMounted(() => {
+  cargarCarreras()
+  const saved = localStorage.getItem('theme_dark')
+  if (saved !== null) {
+    $q.dark.set(saved === 'true')
+  }
+})
 </script>
 
 <style lang="scss" scoped>
