@@ -150,6 +150,7 @@ class ReporteController extends Controller
 
     /**
      * Estudiantes con más de N faltas ACTIVAS acumuladas (después de la última notificación/acción tomada).
+     * Agrupado POR ESTUDIANTE mostrando todas sus materias e inasistencias.
      */
     public function estudiantesConFaltas(Request $request)
     {
@@ -159,79 +160,119 @@ class ReporteController extends Controller
         $isSuperAdmin = $admin ? (bool)$admin->super_admin : true;
         $carreraId = $request->query('carrera_id') ?: ($isSuperAdmin ? null : $admin?->carrera_id);
 
-        $query = Inscripcion::with(['estudiante.carrera', 'materia.carrera', 'accionesFaltas.admin'])
-            ->select('inscripciones.*')
-            ->join('materias', 'materias.id', '=', 'inscripciones.materia_id');
-
-        if ($materiaId) {
-            $query->where('inscripciones.materia_id', $materiaId);
-        }
+        $query = \App\Models\Estudiante::with([
+            'carrera',
+            'inscripciones.materia.carrera',
+            'inscripciones.accionesFaltas.admin',
+            'inscripciones.asistencias.horario.docente'
+        ]);
 
         if ($carreraId) {
-            $query->where('materias.carrera_id', $carreraId);
+            $query->where('carrera_id', $carreraId);
         }
 
-        $inscripciones = $query->get();
+        if ($materiaId) {
+            $query->whereHas('inscripciones', fn($q) => $q->where('materia_id', $materiaId));
+        }
 
-        $resultado = $inscripciones->map(function ($insc) {
-            $ultimaAccion = $insc->ultimaAccionFalta();
-            $totalFaltasActivas = $insc->contarFaltasActivas();
-            $totalFaltasHistoricas = $insc->asistencias()->where('estado', 'ausente')->count();
+        $estudiantes = $query->get();
 
-            $fechasFaltas = $insc->asistencias()
-                ->where('estado', 'ausente')
-                ->with(['horario.docente'])
-                ->orderBy('fecha', 'desc')
-                ->get()
-                ->map(function ($a) use ($ultimaAccion) {
+        $resultado = $estudiantes->map(function ($est) use ($materiaId) {
+            $inscripcionesTarget = $est->inscripciones;
+            if ($materiaId) {
+                $inscripcionesTarget = $inscripcionesTarget->where('materia_id', $materiaId);
+            }
+
+            $totalFaltasActivas = 0;
+            $totalFaltasHistoricas = 0;
+            $todasLasFechasFaltas = collect();
+            $todasLasAccionesTomadas = collect();
+            $materiasResumen = [];
+            $esAbandono = false;
+
+            foreach ($inscripcionesTarget as $insc) {
+                if ($insc->estado === 'abandono') {
+                    $esAbandono = true;
+                }
+
+                $ultimaAccion = $insc->ultimaAccionFalta();
+                $faltasActivasInsc = $insc->contarFaltasActivas();
+                $faltasHistInsc = $insc->asistencias()->where('estado', 'ausente')->count();
+
+                $totalFaltasActivas += $faltasActivasInsc;
+                $totalFaltasHistoricas += $faltasHistInsc;
+
+                $materiasResumen[] = [
+                    'inscripcion_id'   => $insc->id,
+                    'materia_id'       => $insc->materia_id,
+                    'materia_codigo'   => $insc->materia->codigo ?? '',
+                    'materia_nombre'   => $insc->materia->nombre ?? '',
+                    'faltas_activas'   => $faltasActivasInsc,
+                    'faltas_historicas'=> $faltasHistInsc,
+                    'estado'           => $insc->estado,
+                ];
+
+                // Fechas de faltas para esta materia
+                foreach ($insc->asistencias->where('estado', 'ausente') as $a) {
                     $fechaObj = $a->fecha ? Carbon::parse($a->fecha) : null;
                     $esNotificada = false;
                     if ($ultimaAccion && $fechaObj) {
                         $esNotificada = $fechaObj->toDateString() <= $ultimaAccion->fecha_accion->toDateString();
                     }
 
-                    return [
+                    $todasLasFechasFaltas->push([
                         'id'             => $a->id,
+                        'inscripcion_id' => $insc->id,
+                        'materia_codigo' => $insc->materia->codigo ?? '',
+                        'materia_nombre' => $insc->materia->nombre ?? '',
                         'fecha'          => $fechaObj ? $fechaObj->format('d/m/Y') : '',
                         'fecha_iso'      => $fechaObj ? $fechaObj->toDateString() : '',
                         'docente_nombre' => $a->docente ? "{$a->docente->apellido} {$a->docente->nombre}" : 'Docente',
                         'es_retroactiva' => (bool)$a->es_retroactiva,
                         'justificacion'  => $a->justificacion_retroactiva,
                         'es_notificada'  => $esNotificada,
-                    ];
-                });
+                    ]);
+                }
 
-            $accionesTomadas = $insc->accionesFaltas
-                ->sortByDesc('fecha_accion')
-                ->map(function ($acc) {
-                    return [
-                        'id'           => $acc->id,
-                        'fecha_accion' => $acc->fecha_accion ? $acc->fecha_accion->format('d/m/Y H:i') : '',
-                        'observacion'  => $acc->observacion,
-                        'admin_nombre' => $acc->admin ? "{$acc->admin->nombre} {$acc->admin->apellido}" : 'Director de Carrera',
-                    ];
-                })->values();
+                // Acciones tomadas de esta materia
+                foreach ($insc->accionesFaltas as $acc) {
+                    $todasLasAccionesTomadas->push([
+                        'id'             => $acc->id,
+                        'inscripcion_id' => $insc->id,
+                        'materia_codigo' => $insc->materia->codigo ?? '',
+                        'fecha_accion'   => $acc->fecha_accion ? $acc->fecha_accion->format('d/m/Y H:i') : '',
+                        'observacion'    => $acc->observacion,
+                        'admin_nombre'   => $acc->admin ? "{$acc->admin->nombre} {$acc->admin->apellido}" : 'Director de Carrera',
+                    ]);
+                }
+            }
+
+            // Ordenar por fecha descendente sin duplicar acciones idénticas
+            $fechasFaltasOrdenadas = $todasLasFechasFaltas->sortByDesc('fecha_iso')->values();
+            $accionesOrdenadas = $todasLasAccionesTomadas->unique(function ($acc) {
+                return $acc['fecha_accion'] . '_' . $acc['observacion'];
+            })->sortByDesc('fecha_accion')->values();
+
+            $primeraInsc = $inscripcionesTarget->first();
 
             return [
-                'inscripcion_id'         => $insc->id,
-                'estudiante_id'          => $insc->estudiante_id,
-                'estudiante_carnet'      => $insc->estudiante->carnet ?? '',
-                'estudiante_nombre'      => trim(($insc->estudiante->primer_apellido ?? '') . ' ' . ($insc->estudiante->segundo_apellido ?? '') . ' ' . ($insc->estudiante->nombres ?? '')),
-                'carrera'                => $insc->estudiante->carrera->nombre ?? '',
-                'contacto_nombre'        => $insc->estudiante->contacto_nombre,
-                'contacto_parentesco'    => $insc->estudiante->contacto_parentesco,
-                'contacto_telefono'      => $insc->estudiante->contacto_telefono,
-                'materia_id'             => $insc->materia_id,
-                'materia_codigo'         => $insc->materia->codigo ?? '',
-                'materia_nombre'         => $insc->materia->nombre ?? '',
+                'inscripcion_id'         => $primeraInsc?->id,
+                'estudiante_id'          => $est->id,
+                'estudiante_carnet'      => $est->carnet ?? '',
+                'estudiante_nombre'      => trim(($est->primer_apellido ?? '') . ' ' . ($est->segundo_apellido ?? '') . ' ' . ($est->nombres ?? '')),
+                'carrera'                => $est->carrera->nombre ?? '',
+                'contacto_nombre'        => $est->contacto_nombre,
+                'contacto_parentesco'    => $est->contacto_parentesco,
+                'contacto_telefono'      => $est->contacto_telefono,
+                'materias'               => $materiasResumen,
+                'materia_codigo'         => collect($materiasResumen)->pluck('materia_codigo')->implode(', '),
+                'materia_nombre'         => collect($materiasResumen)->pluck('materia_nombre')->implode(', '),
                 'total_faltas'           => $totalFaltasActivas,
                 'total_faltas_historicas' => $totalFaltasHistoricas,
-                'estado_inscripcion'     => $insc->estado,
-                'fecha_abandono'         => $insc->fecha_abandono ? $insc->fecha_abandono->format('d/m/Y H:i') : null,
-                'motivo_abandono'        => $insc->motivo_abandono,
-                'fechas_faltas'          => $fechasFaltas,
-                'acciones_tomadas'       => $accionesTomadas,
-                'tiene_notificacion'     => $accionesTomadas->count() > 0,
+                'estado_inscripcion'     => $esAbandono ? 'abandono' : 'activo',
+                'fechas_faltas'          => $fechasFaltasOrdenadas,
+                'acciones_tomadas'       => $accionesOrdenadas,
+                'tiene_notificacion'     => $accionesOrdenadas->count() > 0,
             ];
         });
 
@@ -246,27 +287,46 @@ class ReporteController extends Controller
     }
 
     /**
-     * Registra una Acción Tomada (Notificación) por el Director de Carrera para reiniciar faltas activas.
+     * Registra una Acción Tomada (Notificación) por el Director de Carrera para reiniciar faltas activas
+     * en TODAS las materias del estudiante.
      */
-    public function registrarAccionTomada(Request $request, $inscripcionId)
+    public function registrarAccionTomada(Request $request, $id)
     {
         $request->validate([
             'observacion' => 'required|string|min:5|max:2000',
         ]);
 
-        $inscripcion = Inscripcion::findOrFail($inscripcionId);
         $admin = $request->user();
+        $now = Carbon::now();
 
-        $accion = \App\Models\AccionFalta::create([
-            'inscripcion_id' => $inscripcion->id,
-            'fecha_accion'   => Carbon::now(),
-            'observacion'    => $request->observacion,
-            'admin_id'       => $admin?->id,
-        ]);
+        // Determinar si es estudiante_id o inscripcion_id
+        $estudiante = \App\Models\Estudiante::find($id);
+        if (!$estudiante) {
+            $insc = Inscripcion::find($id);
+            if ($insc) {
+                $estudiante = $insc->estudiante;
+            }
+        }
+
+        if (!$estudiante) {
+            return response()->json(['message' => 'Estudiante no encontrado.'], 404);
+        }
+
+        $inscripciones = Inscripcion::where('estudiante_id', $estudiante->id)->get();
+
+        DB::transaction(function () use ($inscripciones, $now, $request, $admin) {
+            foreach ($inscripciones as $insc) {
+                \App\Models\AccionFalta::create([
+                    'inscripcion_id' => $insc->id,
+                    'fecha_accion'   => $now,
+                    'observacion'    => $request->observacion,
+                    'admin_id'       => $admin?->id,
+                ]);
+            }
+        });
 
         return response()->json([
-            'message' => '✅ Acción tomada / Notificación registrada exitosamente. El contador de faltas para este estudiante se ha actualizado.',
-            'accion'  => $accion,
+            'message' => '✅ Acción tomada / Notificación registrada exitosamente para todas las materias del estudiante. El contador de faltas activas se ha actualizado.',
         ]);
     }
 

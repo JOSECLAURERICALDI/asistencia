@@ -91,8 +91,20 @@
 
           <template #body-cell-materia="props">
             <q-td :props="props">
-              <div class="text-weight-semibold text-blue-3">{{ props.row.materia_codigo }} - {{ props.row.materia_nombre }}</div>
-              <div class="text-caption text-grey-5">{{ props.row.carrera }}</div>
+              <div class="text-caption text-grey-5 q-mb-xs">{{ props.row.carrera }}</div>
+              <div class="flex flex-wrap gap-1">
+                <q-chip
+                  v-for="mat in props.row.materias"
+                  :key="mat.inscripcion_id"
+                  :color="mat.faltas_activas >= 4 ? 'deep-orange-9' : mat.faltas_activas >= 2 ? 'amber-9' : 'blue-grey-8'"
+                  text-color="white"
+                  dense size="sm"
+                  class="text-weight-semibold"
+                >
+                  {{ mat.materia_codigo }}: {{ mat.faltas_activas }} falta(s)
+                  <q-tooltip>{{ mat.materia_nombre }}</q-tooltip>
+                </q-chip>
+              </div>
             </q-td>
           </template>
 
@@ -166,16 +178,33 @@
         </q-card-section>
 
         <q-card-section class="q-pt-none" v-if="estudianteSeleccionado">
-          <!-- Info box de materia -->
-          <div class="info-box q-mb-md flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <div class="text-weight-bold text-blue-3">{{ estudianteSeleccionado.materia_codigo }} - {{ estudianteSeleccionado.materia_nombre }}</div>
+          <!-- Info box: todas las materias del estudiante -->
+          <div class="info-box q-mb-md">
+            <div class="flex items-center justify-between q-mb-sm">
               <div class="text-caption text-grey-3">Carrera: {{ estudianteSeleccionado.carrera }}</div>
-            </div>
-            <div>
               <q-chip color="negative" text-color="white" class="text-weight-bold" icon="error">
-                Faltas activas: {{ estudianteSeleccionado.total_faltas }}
+                Total faltas activas: {{ estudianteSeleccionado.total_faltas }}
               </q-chip>
+            </div>
+            <div class="text-weight-bold text-blue-3 q-mb-xs">Materias inscritas:</div>
+            <div class="flex flex-wrap gap-2">
+              <div
+                v-for="mat in estudianteSeleccionado.materias"
+                :key="mat.inscripcion_id"
+                class="materia-falta-item q-pa-xs"
+                style="border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; min-width: 160px;"
+              >
+                <div class="text-caption text-white text-weight-bold">{{ mat.materia_codigo }}</div>
+                <div class="text-caption text-grey-4" style="font-size: 0.75rem;">{{ mat.materia_nombre }}</div>
+                <div class="flex items-center gap-1 q-mt-xs">
+                  <q-chip
+                    :color="mat.faltas_activas >= 4 ? 'negative' : mat.faltas_activas >= 2 ? 'warning' : 'blue-grey-7'"
+                    text-color="white" dense size="xs" icon="cancel"
+                    :label="`${mat.faltas_activas} activa(s)`"
+                  />
+                  <span class="text-caption text-grey-5">Hist: {{ mat.faltas_historicas }}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -244,6 +273,13 @@
             flat dark dense
             no-data-label="No hay detalle de fechas disponible"
           >
+            <template #body-cell-materia="props">
+              <q-td :props="props">
+                <div class="text-weight-bold text-blue-3" style="font-size: 0.8rem;">{{ props.row.materia_codigo }}</div>
+                <div class="text-caption text-grey-5" style="font-size: 0.7rem;">{{ props.row.materia_nombre }}</div>
+              </q-td>
+            </template>
+
             <template #body-cell-fecha="props">
               <q-td :props="props">
                 <q-badge :color="props.row.es_notificada ? 'blue-grey-7' : 'red-9'" class="text-weight-bold q-px-sm q-py-xs">
@@ -421,6 +457,7 @@ const columns = [
 ]
 
 const columnsDetalle = [
+  { name: 'materia', label: 'Materia', align: 'left', field: 'materia_codigo' },
   { name: 'fecha', label: 'Fecha de Falta', align: 'left', field: 'fecha' },
   { name: 'estado_falta', label: 'Estado Falta', align: 'center', field: 'es_notificada' },
   { name: 'docente', label: 'Docente Registrador', align: 'left', field: 'docente_nombre' },
@@ -469,8 +506,8 @@ async function guardarAccionTomada() {
 
   guardandoAccion.value = true
   try {
-    const inscId = estudianteSeleccionado.value.inscripcion_id
-    const res = await api.post(`/admin/faltas/${inscId}/accion-tomar`, {
+    const estId = estudianteSeleccionado.value.estudiante_id
+    const res = await api.post(`/admin/faltas/${estId}/accion-tomar`, {
       observacion: observacionAccion.value
     })
     $q.notify({ type: 'positive', message: res.data.message })
